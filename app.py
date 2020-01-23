@@ -13,6 +13,7 @@ import logging
 from logging import Formatter, FileHandler
 from flask_wtf import Form
 from forms import *
+import datetime
 #----------------------------------------------------------------------------#
 # App Config.
 #----------------------------------------------------------------------------#
@@ -43,7 +44,7 @@ class Venue(db.Model):
     venue_genres = db.relationship('Venue_Genre', backref='venue',
                                     lazy=True, cascade='all, delete-orphan')
     shows = db.relationship('Show', backref='venue',
-                            lazy=True, cascade='all, delete-orphan')
+                            lazy='select', cascade='all, delete-orphan')
 
     # TODO: implement any missing fields, as a database migration using Flask-Migrate
 
@@ -60,7 +61,7 @@ class Artist(db.Model):
     artist_genres = db.relationship('Artist_Genre', backref='artist',
                                     lazy=True, cascade='all, delete-orphan')
     shows = db.relationship('Show', backref='artist',
-                            lazy=True, cascade='all, delete-orphan')
+                            lazy='select', cascade='all, delete-orphan')
 
     # TODO: implement any missing fields, as a database migration using Flask-Migrate
 
@@ -107,6 +108,18 @@ def format_datetime(value, format='medium'):
 
 app.jinja_env.filters['datetime'] = format_datetime
 
+
+def get_upcoming_shows_count(venue):
+    # Get the number of upcoming shows for each venue
+      query = db.session.query(Venue.id, Venue.name, Show.id, Show.show_time)
+      query = query.join(Show)
+      num_upcoming_shows = query.filter(
+          Venue.id == venue.id,
+          Show.show_time > datetime.datetime.now()
+      ).count()
+
+      return num_upcoming_shows
+
 #----------------------------------------------------------------------------#
 # Controllers.
 #----------------------------------------------------------------------------#
@@ -124,27 +137,58 @@ def index():
 def venues():
   # TODO: replace with real venues data.
   #       num_shows should be aggregated based on number of upcoming shows per venue.
-  data=[{
-    "city": "San Francisco",
-    "state": "CA",
-    "venues": [{
-      "id": 1,
-      "name": "The Musical Hop",
-      "num_upcoming_shows": 0,
-    }, {
-      "id": 3,
-      "name": "Park Square Live Music & Coffee",
-      "num_upcoming_shows": 1,
-    }]
-  }, {
-    "city": "New York",
-    "state": "NY",
-    "venues": [{
-      "id": 2,
-      "name": "The Dueling Pianos Bar",
-      "num_upcoming_shows": 0,
-    }]
-  }]
+  
+  # Get a list of unique areas (i.e. city + state) from the Venues records
+  areas = Venue.query.distinct('state', 'city').all()
+
+  # Extract venue data from each area
+  data = []
+  for area in areas:
+    area_dict = {
+      'city': area.city,
+      'state': area.state
+    }
+    
+    venues = Venue.query.filter_by(state=area.state, city=area.city).all()
+    venues_data = []
+    for venue in venues:
+        num_upcoming_shows = get_upcoming_shows_count(venue)
+
+        venue_dict = {
+        'id': venue.id,
+        'name': venue.name,
+        'num_upcoming_shows': num_upcoming_shows
+        }
+        venues_data.append(venue_dict)
+
+    # Add venue info to each area  
+    area_dict['venues'] = venues_data
+    data.append(area_dict)
+
+
+  # data=[{
+  #   "city": "San Francisco",
+  #   "state": "CA",
+  #   "venues": [{
+  #     "id": 1,
+  #     "name": "The Musical Hop",
+  #     "num_upcoming_shows": 0,
+  #   }, {
+  #     "id": 3,
+  #     "name": "Park Square Live Music & Coffee",
+  #     "num_upcoming_shows": 1,
+  #   }]
+  # }, {
+  #   "city": "New York",
+  #   "state": "NY",
+  #   "venues": [{
+  #     "id": 2,
+  #     "name": "The Dueling Pianos Bar",
+  #     "num_upcoming_shows": 0,
+  #   }]
+  # }]
+
+
   return render_template('pages/venues.html', areas=data);
 
 @app.route('/venues/search', methods=['POST'])
@@ -152,14 +196,34 @@ def search_venues():
   # TODO: implement search on artists with partial string search. Ensure it is case-insensitive.
   # seach for Hop should return "The Musical Hop".
   # search for "Music" should return "The Musical Hop" and "Park Square Live Music & Coffee"
+
+  search_term = request.form.get('search_term', '')
+  results = Venue.query.filter(Venue.name.ilike('%' + search_term + '%')).all()
+
+  data = []
+  for venue in results:
+    num_upcoming_shows = get_upcoming_shows_count(venue)
+    venue_info = {
+      "id": venue.id,
+      "name": venue.name,
+      "num_upcoming_shows": num_upcoming_shows
+    }
+    data.append(venue_info)
+
   response={
-    "count": 1,
-    "data": [{
-      "id": 2,
-      "name": "The Dueling Pianos Bar",
-      "num_upcoming_shows": 0,
-    }]
+    "count": len(results),
+    "data": data
   }
+
+  # response={
+  #   "count": 1,
+  #   "data": [{
+  #     "id": 2,
+  #     "name": "The Dueling Pianos Bar",
+  #     "num_upcoming_shows": 0,
+  #   }]
+  # }
+
   return render_template('pages/search_venues.html', results=response, search_term=request.form.get('search_term', ''))
 
 @app.route('/venues/<int:venue_id>')
