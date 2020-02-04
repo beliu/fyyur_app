@@ -11,16 +11,18 @@ from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 import logging
 from logging import Formatter, FileHandler
-from flask_wtf import Form
+from flask_wtf import FlaskForm
 from forms import *
 import datetime
+from wtforms.validators import ValidationError
+import sys
 #----------------------------------------------------------------------------#
 # App Config.
 #----------------------------------------------------------------------------#
 
 app = Flask(__name__)
 moment = Moment(app)
-app.config.from_object('config')
+app.config.from_object('config.DefaultConfig')
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
@@ -380,19 +382,60 @@ def show_venue(venue_id):
 
 @app.route('/venues/create', methods=['GET'])
 def create_venue_form():
-  form = VenueForm()
+  form = VenueForm()  
   return render_template('forms/new_venue.html', form=form)
 
 @app.route('/venues/create', methods=['POST'])
 def create_venue_submission():
   # TODO: insert form data as a new Venue record in the db, instead
   # TODO: modify data to be the data object returned from db insertion
+  form = VenueForm()
+
+  print(form.validate_on_submit())
+  print(form.errors)
+  # print(form.state.data)
+
+  # Create a new venu record
+  new_venue = Venue(
+    name = form.name.data,
+    city = form.city.data,
+    state = form.state.data,
+    address = form.address.data,
+    website = '',
+    phone = form.phone.data,
+    image_link = '',
+    facebook_link = form.facebook_link.data,
+    seeking_talent = False,
+    seeking_description = ''
+  )
+
+  for genre in form.genres.data:
+    venue_genre = Venue_Genre(genre=genre)
+    venue_genre.venue = new_venue
+
+  error = False    # Error flag for db insert
+  try:
+    assert form.validate_on_submit()
+    db.session.add(new_venue)
+    db.session.commit()
+  except:
+    db.session.rollback()
+    print(sys.exc_info())
+    error = True
+  finally:
+    db.session.close()
 
   # on successful db insert, flash success
-  flash('Venue ' + request.form['name'] + ' was successfully listed!')
-  # TODO: on unsuccessful db insert, flash an error instead.
-  # e.g., flash('An error occurred. Venue ' + data.name + ' could not be listed.')
-  # see: http://flask.pocoo.org/docs/1.0/patterns/flashing/
+  if not error:
+    flash('Venue ' + request.form['name'] + ' was successfully listed!')
+  elif not form.validate_on_submit():
+    # TODO: on unsuccessful db insert, flash an error instead.
+    flash('An error occurred when filling out the form. Venue ' 
+           + request.form['name'] + ' could not be listed.')
+  else:
+    flash('An internal database error occurred. Venue ' 
+           + request.form['name'] + ' could not be listed.')
+
   return render_template('pages/home.html')
 
 @app.route('/venues/<venue_id>', methods=['DELETE'])
