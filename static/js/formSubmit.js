@@ -1,21 +1,26 @@
 // Submit a New Venue
-function addVenue(e) {
+function deleteVenue(e) {
     e.preventDefault();
-    // console.log(e);
-    // fetch('/venues/create', {
-    //     method: 'POST',
-    //     body: JSON.stringify({
-    //         'venueName': 'Test'
-    //     }),
-    //     headers: {
-    //         'Content-Type': 'application/json'
-    //     }
-    // })
-    // .then(response => {
-    //     return response.json()
-    // }) 
+    const venueID = e.target.dataset.venue_id;
+    fetch(`/venues/${venueID}`, {
+        method: 'DELETE',
+        body: JSON.stringify({
+            'id': venueID
+        }),
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => {
+        window.location.href = '/';
+    })
+    .catch(function(e) {
+        console.log(e);
+    }
+
+    )
 }
 
-document.getElementById('new-venue-form').onsubmit = function(e) {
-    addVenue(e);
+document.getElementById('delete-venue').onsubmit = function(e) {
+    deleteVenue(e);
 }

@@ -5,7 +5,7 @@
 import json
 import dateutil.parser
 import babel
-from flask import Flask, render_template, request, Response, flash, redirect, url_for, jsonify
+from flask import Flask, render_template, request, Response, flash, redirect, url_for, jsonify, abort
 from flask_moment import Moment
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
@@ -132,6 +132,7 @@ def get_upcoming_shows_count(venue):
 
 @app.route('/')
 def index():
+  print('Testing redirect to homepage')
   return render_template('pages/home.html')
 
 
@@ -237,7 +238,10 @@ def show_venue(venue_id):
   # shows the venue page with the given venue_id
   # TODO: replace with real venue data from the venues table, using venue_id
 
+  # See if this venue exists
   venue = Venue.query.get(venue_id)
+  if venue is None:
+    abort(400)
   
   # Find venue genres
   query = db.session.query(Venue.id, Venue.name, Venue_Genre.genre)
@@ -390,11 +394,7 @@ def create_venue_submission():
   # TODO: insert form data as a new Venue record in the db, instead
   # TODO: modify data to be the data object returned from db insertion
   form = VenueForm()
-
-  print(form.validate_on_submit())
   print(form.errors)
-  # print(form.state.data)
-
   # Create a new venu record
   new_venue = Venue(
     name = form.name.data,
@@ -442,26 +442,55 @@ def create_venue_submission():
 def delete_venue(venue_id):
   # TODO: Complete this endpoint for taking a venue_id, and using
   # SQLAlchemy ORM to delete a record. Handle cases where the session commit could fail.
+  venue = Venue.query.get(venue_id)
+  venue_name = venue.name
 
+  error = False
+  try:
+    db.session.delete(venue)
+    db.session.commit()
+  except:
+    error = True
+    db.session.rollback()
+    print(sys.exc_info())
+  finally:
+    db.session.close()
+  
+  if error:
+    flash(f'An error occurred. Venue {venue_name} was not deleted.')
+  else:
+    flash(f'{venue_name} was successfully deleted.')
+  
   # BONUS CHALLENGE: Implement a button to delete a Venue on a Venue Page, have it so that
   # clicking that button delete it from the db then redirect the user to the homepage
-  return None
+ 
+  return jsonify({'venue_name': venue_name})
 
 #  Artists
 #  ----------------------------------------------------------------
 @app.route('/artists')
 def artists():
   # TODO: replace with real data returned from querying the database
-  data=[{
-    "id": 4,
-    "name": "Guns N Petals",
-  }, {
-    "id": 5,
-    "name": "Matt Quevedo",
-  }, {
-    "id": 6,
-    "name": "The Wild Sax Band",
-  }]
+  artists = Artist.query.all()
+  data = []
+  for artist in artists:
+    artist_info = {
+      "id": artist.id,
+      "name": artist.name
+    }
+    data.append(artist_info)
+
+  # data=[{
+  #   "id": 4,
+  #   "name": "Guns N Petals",
+  # }, {
+  #   "id": 5,
+  #   "name": "Matt Quevedo",
+  # }, {
+  #   "id": 6,
+  #   "name": "The Wild Sax Band",
+  # }]
+  
   return render_template('pages/artists.html', artists=data)
 
 @app.route('/artists/search', methods=['POST'])

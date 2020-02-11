@@ -39,6 +39,27 @@ class AnyOf_Multiple(AnyOf):
     def default_values_formatter(values):
         return ", ".join(text_type(x) for x in values)
 
+choices = [
+            ('Alternative'),
+            ('Blues'),
+            ('Classical'),
+            ('Country'),
+            ('Electronic'),
+            ('Folk'),
+            ('Funk'),
+            ('Hip-Hop'),
+            ('Heavy Metal'),
+            ('Instrumental'),
+            ('Jazz'),
+            ('Musical Theatre'),
+            ('Pop'),
+            ('Punk'),
+            ('R&B'),
+            ('Reggae'),
+            ('Rock n Roll'),
+            ('Soul'),
+            ('Other')
+        ]
 
 class ShowForm(FlaskForm):
     artist_id = StringField(
@@ -125,28 +146,6 @@ class VenueForm(FlaskForm):
     image_link = StringField(
         'image_link'
     )
-
-    choices=[
-            ('Alternative'),
-            ('Blues'),
-            ('Classical'),
-            ('Country'),
-            ('Electronic'),
-            ('Folk'),
-            ('Funk'),
-            ('Hip-Hop'),
-            ('Heavy Metal'),
-            ('Instrumental'),
-            ('Jazz'),
-            ('Musical Theatre'),
-            ('Pop'),
-            ('Punk'),
-            ('R&B'),
-            ('Reggae'),
-            ('Rock n Roll'),
-            ('Soul'),
-            ('Other')
-        ]
 
     genres = SelectMultipleField(
         # TODO implement enum restriction
@@ -250,7 +249,8 @@ class ArtistForm(FlaskForm):
     )
     genres = SelectMultipleField(
         # TODO implement enum restriction
-        'genres', validators=[DataRequired()],
+        'genres', validators=[DataRequired(),
+        AnyOf_Multiple(choices)],
         choices=[
             ('Alternative', 'Alternative'),
             ('Blues', 'Blues'),
@@ -274,7 +274,6 @@ class ArtistForm(FlaskForm):
         ]
     )
     facebook_link = StringField(
-        # TODO implement enum restriction
         'facebook_link', validators=[URL()]
     )
 
