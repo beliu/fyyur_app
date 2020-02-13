@@ -506,18 +506,15 @@ def edit_artist(artist_id):
   artist = Artist.query.get(artist_id)
   form = ArtistForm()
 
-  # Get the artist genres
-  query = Artist_Genre.query.join(Artist)
-  genre_results = query.filter(Artist.id == artist_id).all()
-  genres = [results.genre for results in genre_results]
-
   form.name.data = artist.name
   form.city.data = artist.city
+  form.state.data = artist.state
   form.phone.data = artist.phone
   form.facebook_link.data = artist.facebook_link
   
-  form.state.data = artist.state
-  form.genres.data = genres
+  # Get the artist genres
+  artist_genres = [genre.genre for genre in artist.genres]
+  form.genres.data = artist_genres
   
   return render_template('forms/edit_artist.html', form=form, artist=artist)
 
@@ -528,11 +525,6 @@ def edit_artist_submission(artist_id):
 
   form = ArtistForm()
   artist = Artist.query.get(artist_id)
-
-  # Get the artist genres
-  query = Artist_Genre.query.join(Artist)
-  genre_results = query.filter(Artist.id == artist_id).all()
-  artist_genres = [results.genre for results in genre_results]
 
   # Update artist records
   artist.name = form.name.data
@@ -568,38 +560,80 @@ def edit_artist_submission(artist_id):
   elif not form.validate_on_submit():
     # TODO: on unsuccessful db insert, flash an error instead.
     flash(f'An error occurred when filling out the form. ' 
-           + f'Artist {request.form["name"]} info has not been changed.')
+          + f'Artist {request.form["name"]} info has not been changed.')
   else:
     flash(f'An internal database error occurred. ' 
-           + f'Artist {request.form["name"]} info has not been changed.')
+          + f'Artist {request.form["name"]} info has not been changed.')
 
   return redirect(url_for('show_artist', artist_id=artist_id))
 
 @app.route('/venues/<int:venue_id>/edit', methods=['GET'])
 def edit_venue(venue_id):
   form = VenueForm()
-  venue={
-    "id": 1,
-    "name": "The Musical Hop",
-    "genres": ["Jazz", "Reggae", "Swing", "Classical", "Folk"],
-    "address": "1015 Folsom Street",
-    "city": "San Francisco",
-    "state": "CA",
-    "phone": "123-123-1234",
-    "website": "https://www.themusicalhop.com",
-    "facebook_link": "https://www.facebook.com/TheMusicalHop",
-    "seeking_talent": True,
-    "seeking_description": "We are on the lookout for a local artist to play every two weeks. Please call us.",
-    "image_link": "https://images.unsplash.com/photo-1543900694-133f37abaaa5?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=400&q=60"
-  }
+
   # TODO: populate form with values from venue with ID <venue_id>
+  venue = Venue.query.get(venue_id)
+  form.name.data = venue.name
+  form.city.data = venue.city
+  form.state.data = venue.state
+  form.address.data = venue.address
+  form.phone.data = venue.phone
+  form.facebook_link.data = venue.facebook_link
+
+  # Get the venue genres
+  venue_genres = [genre.genre for genre in venue.genres]
+  form.genres.data = venue_genres
+
   return render_template('forms/edit_venue.html', form=form, venue=venue)
 
 @app.route('/venues/<int:venue_id>/edit', methods=['POST'])
 def edit_venue_submission(venue_id):
   # TODO: take values from the form submitted, and update existing
   # venue record with ID <venue_id> using the new attributes
+  form = VenueForm()
+  venue = Venue.query.get(venue_id)
+
+  # Update venue records
+  venue.name = form.name.data
+  venue.city = form.city.data
+  venue.state = form.state.data
+  venue.phone = form.phone.data
+  venue.facebook_link = form.facebook_link.data
+
+  # Update the genres
+  form_genres = form.genres.data
+  venue.genres = []
+
+  for f_genre in form_genres:
+    venue_genre = Venue_Genre(genre=f_genre)
+    venue.genres.append(venue_genre)
+  
+  error = False
+  try:
+    assert form.validate_on_submit()
+    # db.session.add(artist)
+    db.session.commit()
+  except:
+    db.session.rollback()
+    print(sys.exc_info())
+    print(form.errors)
+    error = True
+  finally:
+    db.session.close()
+  
+  # on successful db insert, flash success
+  if not error:
+    flash(f'Venue {request.form["name"]} was successfully edited.')
+  elif not form.validate_on_submit():
+    # TODO: on unsuccessful db insert, flash an error instead.
+    flash(f'An error occurred when filling out the form. ' 
+          + f'Venue {request.form["name"]} info has not been changed.')
+  else:
+    flash(f'An internal database error occurred. ' 
+          + f'Venue {request.form["name"]} info has not been changed.')
+
   return redirect(url_for('show_venue', venue_id=venue_id))
+
 
 #  Create Artist
 #  ----------------------------------------------------------------
@@ -611,15 +645,54 @@ def create_artist_form():
 
 @app.route('/artists/create', methods=['POST'])
 def create_artist_submission():
-  # called upon submitting the new artist listing form
-  # TODO: insert form data as a new Venue record in the db, instead
+  # Called upon submitting the new artist listing form
+  # TODO: insert form data as a new Artist record in the db, instead
   # TODO: modify data to be the data object returned from db insertion
+  form = ArtistForm()
 
-  # on successful db insert, flash success
-  flash('Artist ' + request.form['name'] + ' was successfully listed!')
+  artist = Artist(
+    name = form.name.data,
+    city = form.city.data,
+    state = form.state.data,
+    phone = form.phone.data,
+    image_link = '',
+    website = '',
+    facebook_link = form.facebook_link.data
+  )
+
+  # Create new genres for this artist
+  genres = form.genres.data
+  for genre in genres:
+    artist_genre = Artist_Genre(genre=genre)
+    artist.genres.append(artist_genre)
+
+  error = False
+  try:
+    assert form.validate_on_submit()
+    db.session.add(artist)
+    db.session.commit()
+  except:
+    db.session.rollback()
+    print(sys.exc_info())
+    print(form.errors)
+    error = True
+  finally:
+    db.session.close()
+  
+  if not error:
+    # on successful db insert, flash success
+    flash(f'Artist {request.form["name"]} was successfully listed!')
   # TODO: on unsuccessful db insert, flash an error instead.
   # e.g., flash('An error occurred. Artist ' + data.name + ' could not be listed.')
-  return render_template('pages/home.html')
+  elif not form.validate_on_submit():
+    flash(f'An error occurred while filling the form. '
+          + f'Artist {request.form["name"]} could not be listed.')
+  else:
+    flash(f'An internal database error occurred. '
+            + f'Artist {request.form["name"]} could not be listed.')
+
+  # return render_template('pages/home.html')
+  return redirect(url_for('index'))
 
 
 #  Shows
