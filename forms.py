@@ -3,10 +3,21 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, SelectField, SelectMultipleField, DateTimeField
 from wtforms.validators import DataRequired, AnyOf, URL, ValidationError, HostnameValidation
 from wtforms.compat import string_types, text_type
+from app import db, Artist, Venue
 import re
 
 # Custom validator for URL
 class URL_Mod(URL):
+    """
+    Compares the incoming data to a sequence of valid inputs.
+    :param values:
+        A sequence of valid inputs.
+    :param message:
+        Error message to raise in case of a validation error. `%(values)s`
+        contains the list of values.
+    :param values_formatter:
+        Function used to format the list of values in the error message.
+    """
     def __init__(self, require_tld=True, message=None):
             regex = (
                 r"(^[a-z]+://)?"
@@ -33,13 +44,6 @@ class AnyOf_Multiple(AnyOf):
     :param values_formatter:
         Function used to format the list of values in the error message.
     """
-
-    # def __init__(self, values, message=None, values_formatter=None):
-    #     self.values = values
-    #     self.message = message
-    #     if values_formatter is None:
-    #         values_formatter = self.default_values_formatter
-    #     self.values_formatter = values_formatter
 
     def __call__(self, form, field):
     
@@ -217,17 +221,39 @@ state_choices = [
         ]
 
 class ShowForm(FlaskForm):
-    artist_id = StringField(
-        'artist_id'
+
+    artist_id = SelectField(
+        'artist_id',
+        coerce=int,
+        validators=[DataRequired()]
     )
-    venue_id = StringField(
-        'venue_id'
+    venue_id = SelectField(
+        'venue_id',
+        coerce=int,
+        validators=[DataRequired()]
     )
     start_time = DateTimeField(
         'start_time',
         validators=[DataRequired()],
         default= datetime.today()
     )
+
+    # Modify init so that shows can be created 
+    # from newly added venues or artists
+    def __init__(self, *args, **kwargs):
+        # Get a list of artists
+        artists = Artist.query.order_by(Artist.name).all()
+        artist_choices = [(artist.id, artist.name) for artist in artists]
+    
+        # Get a list of venues
+        venues = Venue.query.order_by(Venue.name).all()
+        venue_choices = [(venue.id, venue.name) for venue in venues]
+
+        super(ShowForm, self).__init__(*args, **kwargs)
+        self.artist_id.choices = artist_choices
+        self.venue_id.choices = venue_choices
+
+        # return form
 
 class VenueForm(FlaskForm):
     name = StringField(
