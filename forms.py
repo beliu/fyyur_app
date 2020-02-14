@@ -9,15 +9,17 @@ import re
 # Custom validator for URL
 class URL_Mod(URL):
     """
-    Compares the incoming data to a sequence of valid inputs.
-    :param values:
-        A sequence of valid inputs.
+    Simple regexp based url validation. Much like the email validator, you
+    probably want to validate the url later by other means if the url must
+    resolve.
+    :param require_tld:
+        If true, then the domain-name portion of the URL must contain a .tld
+        suffix.  Set this to false if you want to allow domains like
+        `localhost`.
     :param message:
-        Error message to raise in case of a validation error. `%(values)s`
-        contains the list of values.
-    :param values_formatter:
-        Function used to format the list of values in the error message.
+        Error message to raise in case of a validation error.
     """
+
     def __init__(self, require_tld=True, message=None):
             regex = (
                 r"(^[a-z]+://)?"
