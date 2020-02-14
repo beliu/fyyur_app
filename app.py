@@ -153,6 +153,73 @@ def get_past_shows(table, id, return_count=True):
   return num_past_shows.all()
 
 
+def update_records(instance, op='edit', form=None, print_errors=False, messages=None):
+  '''
+  Update the records of a given table, while checking for errors and 
+  form validation. Provide operation feedback if required.
+  :param instance:
+    An instance of the data table.
+  :param op:
+    The operation to be performed on the table. Options include:
+    edit, add, delete.
+  :param form:
+    The instance of the Form class.
+  :param print_errors: 
+    Boolean to indicate if errors 
+    should be printed to command line.
+  :param messages:
+    A dictionary with messages that will be flashed to the user view.
+    The structure is as follows:
+    messages = {
+      'success': MESSAGE_STR for successful operation,
+      'form_not_valid': MESSAGE_STR when form doesn't validate,
+      'internal_error': MESSATE_STR when an error occurs with the database
+    }
+  '''
+
+  # Perform the operation on the database
+  error = False    # Error flag for db insert
+  try:
+    if form is not None:
+      assert form.validate_on_submit()
+    if op == 'add':
+      db.session.add(instance)
+    elif op == 'delete':
+      db.session.delete(instance)
+    db.session.commit()
+  except:
+    db.session.rollback()
+    if print_errors:
+      print(sys.exc_info())
+      if form is not None:
+        print(form.errors)
+    error = True
+  finally:
+    db.session.close()
+
+  # on successful db insert, flash success
+  if messages is None:
+    success = 'Success!'
+    form_not_valid = ('An error occurred when filling out the form. ' 
+                      + 'Please try again.')
+    internal_error = 'An internal database error occurred. Please try again.'
+  else:
+    if 'success' in messages:
+      success = messages['success']
+    if 'form_not_valid' in messages:
+      form_not_valid = messages['form_not_valid']
+    if 'internal_error' in messages:
+      internal_error = messages['internal_error']
+
+  if not error:
+    flash(success)
+  elif not form.validate_on_submit():
+    # TODO: on unsuccessful db insert, flash an error instead.
+    flash(form_not_valid)
+  else:
+    flash(internal_error)
+
+
 #----------------------------------------------------------------------------#
 # Controllers.
 #----------------------------------------------------------------------------#
@@ -282,6 +349,7 @@ def show_venue(venue_id):
     }
     upcoming_shows.append(show_dict)
 
+  # Build the venue data dictionary
   data = {
     "id": venue.id,
     "name": venue.name,
@@ -336,30 +404,15 @@ def create_venue_submission():
     venue_genre = Venue_Genre(genre=genre)
     venue_genre.venue = new_venue
 
-  error = False    # Error flag for db insert
-  try:
-    assert form.validate_on_submit()
-    db.session.add(new_venue)
-    db.session.commit()
-  except:
-    db.session.rollback()
-    print(sys.exc_info())
-    print(form.errors)
-    error = True
-  finally:
-    db.session.close()
-
-  # on successful db insert, flash success
-  if not error:
-    flash('Venue ' + request.form['name'] + ' was successfully listed!')
-  elif not form.validate_on_submit():
-    # TODO: on unsuccessful db insert, flash an error instead.
-    flash('An error occurred when filling out the form. Venue ' 
-           + request.form['name'] + ' could not be listed.')
-  else:
-    flash('An internal database error occurred. Venue ' 
-           + request.form['name'] + ' could not be listed.')
-
+  messages = {
+    'success': f'Venue {request.form["name"]} was successfully listed!',
+    'form_not_valid': (f'An error occurred when filling out the form. '
+                       + f'Venue {request.form["name"]} could not be listed.'), 
+    'internal_error': (f'An internal database error occurred. '
+                       + f'Venue {request.form["name"]} could not be listed.')
+  }
+  update_records(new_venue, 'add', form=form, 
+                 print_errors=True, messages=messages)
   
   return render_template('pages/home.html')
 
@@ -371,24 +424,12 @@ def delete_venue(venue_id):
   venue = Venue.query.get(venue_id)
   venue_name = venue.name
 
-  error = False
-  try:
-    db.session.delete(venue)
-    db.session.commit()
-  except:
-    error = True
-    db.session.rollback()
-    print(sys.exc_info())
-  finally:
-    db.session.close()
-  
-  if error:
-    flash(f'An error occurred. Venue {venue_name} was not deleted.')
-  else:
-    flash(f'{venue_name} was successfully deleted.')
-  
-  # BONUS CHALLENGE: Implement a button to delete a Venue on a Venue Page, have it so that
-  # clicking that button delete it from the db then redirect the user to the homepage
+  messages = {
+    'internal_error': f'An error occurred. Venue {venue_name} was not deleted.',
+    'success': f'{venue_name} was successfully deleted.'
+  }
+
+  update_records(venue, 'delete', print_errors=True, messages=messages)
  
   return jsonify({'venue_name': venue_name})
 
@@ -554,30 +595,14 @@ def edit_artist_submission(artist_id):
     artist_genre = Artist_Genre(genre=f_genre)
     artist.genres.append(artist_genre)
   
-  error = False
-  try:
-    assert form.validate_on_submit()
-    # db.session.add(artist)
-    db.session.commit()
-    reload(forms)
-  except:
-    db.session.rollback()
-    print(sys.exc_info())
-    print(form.errors)
-    error = True
-  finally:
-    db.session.close()
-  
-  # on successful db insert, flash success
-  if not error:
-    flash(f'Artist {request.form["name"]} was successfully edited.')
-  elif not form.validate_on_submit():
-    # TODO: on unsuccessful db insert, flash an error instead.
-    flash(f'An error occurred when filling out the form. ' 
-          + f'Artist {request.form["name"]} info has not been changed.')
-  else:
-    flash(f'An internal database error occurred. ' 
-          + f'Artist {request.form["name"]} info has not been changed.')
+  messages = {
+    'success': f'Artist {request.form["name"]} was successfully edited.',
+    'form_not_valid': f'An error occurred when filling out the form. ' 
+                + f'Artist {request.form["name"]} info has not been changed.', 
+    'internal_error': f'An internal database error occurred. ' 
+                + f'Artist {request.form["name"]} info has not been changed.'
+  }
+  update_records(artist, form=form, print_errors=True, messages=messages)
 
   return redirect(url_for('show_artist', artist_id=artist_id))
 
@@ -624,30 +649,14 @@ def edit_venue_submission(venue_id):
     venue_genre = Venue_Genre(genre=f_genre)
     venue.genres.append(venue_genre)
   
-  error = False
-  try:
-    assert form.validate_on_submit()
-    # db.session.add(artist)
-    db.session.commit()
-    reload(forms)
-  except:
-    db.session.rollback()
-    print(sys.exc_info())
-    print(form.errors)
-    error = True
-  finally:
-    db.session.close()
-  
-  # on successful db insert, flash success
-  if not error:
-    flash(f'Venue {request.form["name"]} was successfully edited.')
-  elif not form.validate_on_submit():
-    # TODO: on unsuccessful db insert, flash an error instead.
-    flash(f'An error occurred when filling out the form. ' 
-          + f'Venue {request.form["name"]} info has not been changed.')
-  else:
-    flash(f'An internal database error occurred. ' 
-          + f'Venue {request.form["name"]} info has not been changed.')
+  messages = {
+    'success': f'Venue {request.form["name"]} was successfully edited.',
+    'form_not_valid': (f'An error occurred when filling out the form. ' 
+            + f'Venue {request.form["name"]} info has not been changed.'),
+    'internal_error': (f'An internal database error occurred. ' 
+            + f'Venue {request.form["name"]} info has not been changed.')
+  }
+  update_records(venue, form=form, print_errors=True, messages=messages)
 
   return redirect(url_for('show_venue', venue_id=venue_id))
 
@@ -684,34 +693,18 @@ def create_artist_submission():
     artist_genre = Artist_Genre(genre=genre)
     artist.genres.append(artist_genre)
 
-  error = False
-  try:
-    assert form.validate_on_submit()
-    db.session.add(artist)
-    db.session.commit()
-    # reload(forms)
-  except:
-    db.session.rollback()
-    print(sys.exc_info())
-    print(form.errors)
-    error = True
-  finally:
-    db.session.close()
-  
-  if not error:
-    # on successful db insert, flash success
-    flash(f'Artist {request.form["name"]} was successfully listed!')
-  # TODO: on unsuccessful db insert, flash an error instead.
-  # e.g., flash('An error occurred. Artist ' + data.name + ' could not be listed.')
-  elif not form.validate_on_submit():
-    flash(f'An error occurred while filling the form. '
-          + f'Artist {request.form["name"]} could not be listed.')
-  else:
-    flash(f'An internal database error occurred. '
-            + f'Artist {request.form["name"]} could not be listed.')
+  messages = {
+    'success': f'Artist {request.form["name"]} was successfully listed!',
+    'form_not_valid': (f'An error occurred while filling the form. '
+                + f'Artist {request.form["name"]} could not be listed.'),
+    'internal_error':( f'An internal database error occurred. '
+                + f'Artist {request.form["name"]} could not be listed.')
+  }
 
-  return render_template('pages/home.html')
-  # return redirect(url_for('index'))
+  update_records(artist, op='add', form=form, 
+                 print_errors=True, messages=messages)
+
+  return redirect(url_for('index'))
 
 
 #  Shows
@@ -780,32 +773,16 @@ def create_show_submission():
     show_time = form.start_time.data
   )
 
-  error = False
-  try:
-    assert form.validate_on_submit()
-    db.session.add(show)
-    db.session.commit()
-  except:
-    db.session.rollback()
-    print(sys.exc_info())
-    print(form.errors)
-    error = True
-  finally:
-    db.session.rollback()
-  
-  if not error:
-    # on successful db insert, flash success
-    flash('Show was successfully listed!')
-  # TODO: on unsuccessful db insert, flash an error instead.
-  # e.g., flash('An error occurred. Show could not be listed.')
-  # see: http://flask.pocoo.org/docs/1.0/patterns/flashing/
-  elif not form.validate_on_submit():
-    flash('An error occurred when filling out the form. '
-          + 'The Show was not listed.')
-  else:
-    flash('An internal database error occurred. The Show was not listed.')
+  messages = {
+    'success': 'Show was successfully listed!',
+    'form_not_valid': ('An error occurred when filling out the form. ' 
+                       + 'The Show was not listed.'),
+    'internal_error': ('An internal database error occurred. '
+                       + 'The Show was not listed.')
+  }
+  update_records(show, op='add', form=form, 
+                 print_errors=True, messages=messages)
 
-  # return render_template('pages/home.html')
   return redirect(url_for('index'))
 
 
